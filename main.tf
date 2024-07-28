@@ -4,110 +4,79 @@ provider "aws" {
   region     = "us-east-1"
 }
 
-resource "aws_vpc" "main" {
-  cidr_block           = "10.0.0.0/16"
-  enable_dns_hostnames = true
-  enable_dns_support   = true
+module "vpc" {
+  source = "./modules/vpc"
 }
 
-resource "aws_subnet" "app_subnet" {
-  vpc_id     = aws_vpc.main.id
-  cidr_block = "10.0.1.0/24"
-  availability_zone = "us-east-1c"
+module "security-groups" {
+  source = "./modules/security-groups"
+  vpc_id = module.vpc.vpc_id
 }
 
-resource "aws_subnet" "db_subnet" {
-  vpc_id     = aws_vpc.main.id
-  cidr_block = "10.0.2.0/24"
+module "load-balancer" {
+  source            = "./modules/load-balancer"
+  vpc_id            = module.vpc.vpc_id
+  subnet_ids        = [module.vpc.app_subnet_id, module.vpc.db_subnet_id]
+  security_group_id = module.security-groups.app_sg_id
 }
-
-resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.main.id
-}
-
-resource "aws_route" "internet_access" {
-  route_table_id         = aws_vpc.main.main_route_table_id
-  destination_cidr_block = "0.0.0.0/0"
-  gateway_id             = aws_internet_gateway.igw.id
-}
-
-resource "aws_security_group" "app_sg" {
-  vpc_id = aws_vpc.main.id
-
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+module "instances" {
+  source = "./modules/instances"
+  instances = {
+    mean-db = {
+      ami               = "ami-04a81a99f5ec58529"
+      instance_type     = "t2.micro"
+      subnet_id         = module.vpc.db_subnet_id
+      security_group_id = module.security-groups.db_sg_id
+      key_name          = "UNIR-DEVOPS"
+      tags              = {}
+    }
+    mean-app = {
+      ami               = "ami-04a81a99f5ec58529"
+      instance_type     = "t3a.small"
+      subnet_id         = module.vpc.app_subnet_id
+      security_group_id = module.security-groups.app_sg_id
+      key_name          = "UNIR-DEVOPS"
+      tags              = {}
+    }
   }
 }
+# module "db_setup" {
+#   source           = "./modules/remote-setup"
+#   user             = "ubuntu"
+#   private_key      = "${path.module}/UNIR-DEVOPS.pem"
+#   host             = module.instances.public_ips["mean-db"]
+#   timeout          = "5m"
+#   inline_commands  = ["mkdir -p /home/ubuntu/code/scripts"]
+#   file_source      = "${path.module}/scripts/mongodb-setup.sh"
+#   file_destination = "/home/ubuntu/code/scripts/mongodb-setup.sh"
+#   inline_post_commands = [
+#     "chmod +x /home/ubuntu/code/scripts/mongodb-setup.sh",
+#     "/home/ubuntu/code/scripts/mongodb-setup.sh"
+#   ]
+#   depends_on = [module.instances.mean_db]
+# }
 
-resource "aws_security_group" "db_sg" {
-  vpc_id = aws_vpc.main.id
+# module "app_setup" {
+#   source           = "./modules/remote-setup"
+#   user             = "ubuntu"
+#   private_key      = "${path.module}/UNIR-DEVOPS.pem"
+#   host             = module.instances.public_ips["mean-app"]
+#   timeout          = "5m"
+#   inline_commands  = ["mkdir -p /home/ubuntu/code/scripts"]
+#   file_source      = ""
+#   file_content = templatefile("${path.module}/scripts/app-setup.sh.tpl", {
+#     db_host = module.instances.private_ips["mean-db"]
+#   })
+#   file_destination = "/home/ubuntu/code/scripts/app-setup.sh"
+#   inline_post_commands = [
+#     "chmod +x /home/ubuntu/code/scripts/app-setup.sh",
+#     "/home/ubuntu/code/scripts/app-setup.sh"
+#   ]
+#   depends_on = [module.instances.mean_app, module.db_setup]
+# }
 
-  ingress {
-    from_port   = 27017
-    to_port     = 27017
-    protocol    = "tcp"
-    cidr_blocks = ["10.0.1.0/24"]
-  }
 
-  ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-resource "aws_instance" "db_instance" {
-  ami                         = "ami-04a81a99f5ec58529" # AMI de Ubuntu
-  instance_type               = "t2.micro"
-  subnet_id                   = aws_subnet.db_subnet.id
-  vpc_security_group_ids      = [aws_security_group.db_sg.id]
-  associate_public_ip_address = true
-  key_name                    = "UNIR-DEVOPS"
-
-  tags = {
-    Name = "mean-db"
-  }
-}
-
-resource "aws_instance" "app_instance" {
-  ami                         = "ami-04a81a99f5ec58529" # AMI de Ubuntu
-  instance_type               = "t3a.small"
-  subnet_id                   = aws_subnet.app_subnet.id
-  vpc_security_group_ids      = [aws_security_group.app_sg.id]
-  associate_public_ip_address = true
-  key_name                    = "UNIR-DEVOPS"
-
-  tags = {
-    Name = "mean-app"
-  }
-
-  depends_on = [aws_instance.db_instance]
-}
 resource "null_resource" "db_setup" {
   # Crear el directorio de destino en la máquina remota antes de copiar el archivo
   provisioner "remote-exec" {
@@ -118,7 +87,7 @@ resource "null_resource" "db_setup" {
       type        = "ssh"
       user        = "ubuntu"
       private_key = file("${path.module}/UNIR-DEVOPS.pem")
-      host        = aws_instance.db_instance.public_ip
+      host        = module.instances.public_ips["mean-db"]
       timeout     = "5m"
       agent       = false
     }
@@ -132,7 +101,7 @@ resource "null_resource" "db_setup" {
       type        = "ssh"
       user        = "ubuntu"
       private_key = file("${path.module}/UNIR-DEVOPS.pem")
-      host        = aws_instance.db_instance.public_ip
+      host        = module.instances.public_ips["mean-db"]
       timeout     = "5m"
       agent       = false
     }
@@ -148,15 +117,13 @@ resource "null_resource" "db_setup" {
       type        = "ssh"
       user        = "ubuntu"
       private_key = file("${path.module}/UNIR-DEVOPS.pem")
-      host        = aws_instance.db_instance.public_ip
+      host        = module.instances.public_ips["mean-db"]
       timeout     = "5m"
       agent       = false
     }
   }
 
-  depends_on = [
-    aws_instance.db_instance
-  ]
+ depends_on = [module.instances.mean_db]
 }
 resource "null_resource" "app_setup" {
 
@@ -168,7 +135,7 @@ resource "null_resource" "app_setup" {
       type        = "ssh"
       user        = "ubuntu"
       private_key = file("${path.module}/UNIR-DEVOPS.pem")
-      host        = aws_instance.app_instance.public_ip
+      host        = module.instances.public_ips["mean-app"]
       timeout     = "1m"
       agent       = false
     }
@@ -176,14 +143,14 @@ resource "null_resource" "app_setup" {
 
   provisioner "file" {
     content = templatefile("${path.module}/scripts/app-setup.sh.tpl", {
-      db_host = aws_instance.db_instance.private_ip
+      db_host = module.instances.private_ips["mean-db"]
     })
     destination = "/home/ubuntu/code/scripts/app-setup.sh"
     connection {
       type        = "ssh"
       user        = "ubuntu"
       private_key = file("${path.module}/UNIR-DEVOPS.pem")
-      host        = aws_instance.app_instance.public_ip
+      host        = module.instances.public_ips["mean-app"]
       timeout     = "4m"
     }
   }
@@ -197,64 +164,10 @@ resource "null_resource" "app_setup" {
       type        = "ssh"
       user        = "ubuntu"
       private_key = file("${path.module}/UNIR-DEVOPS.pem")
-      host        = aws_instance.app_instance.public_ip
+      host        = module.instances.public_ips["mean-app"]
       timeout     = "8m"
     }
   }
 
-  depends_on = [
-    aws_instance.app_instance,
-    null_resource.db_setup
-  ]
+  depends_on = [module.instances.mean_app, null_resource.db_setup]
 }
-
-### Balanceador de carga
-# Creamos el target group para asociar las instancias EC2
-resource "aws_lb_target_group" "app_target_group" {
-  name     = "app-target-group"
-  port     = 80
-  protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
-  target_type = "instance"
-
-  health_check {
-    interval            = 30
-    path                = "/"
-    timeout             = 5
-    healthy_threshold   = 5
-    unhealthy_threshold = 2
-    matcher             = "200"
-  }
-}
-
-# Creamos el load balancer
-resource "aws_lb" "app_lb" {
-  name               = "app-load-balancer"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.app_sg.id]
-  subnets            = [aws_subnet.app_subnet.id, aws_subnet.db_subnet.id]
-
-  enable_deletion_protection = false
-  idle_timeout = 60
-}
-
-# Creamos el listener
-resource "aws_lb_listener" "app_listener" {
-  load_balancer_arn = aws_lb.app_lb.arn
-  port              = 80
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.app_target_group.arn
-  }
-}
-
-# Asociamos las intancias EC2 al target group
-resource "aws_lb_target_group_attachment" "app_instance_attachment" {
-  target_group_arn = aws_lb_target_group.app_target_group.arn
-  target_id        = aws_instance.app_instance.id
-  port             = 80
-}
-
