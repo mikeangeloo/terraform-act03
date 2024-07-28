@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 sleep 30
 
 ### Paso 1: Instalación de node js
@@ -33,7 +33,7 @@ npm install
 sudo rm server/.env
 echo "DB_USER=appuser" >> server/.env
 echo "DB_PASSWORD=apppassword123" >> server/.env
-echo "DB_HOST=18.118.26.20" >> server/.env
+echo "DB_HOST=${db_host}" >> server/.env
 echo "DB_NAME=meanStackExample" >> server/.env
 # Construyendo app
 npm run build
