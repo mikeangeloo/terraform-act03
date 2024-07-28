@@ -17,3 +17,7 @@ output "app_instance_private_ip" {
 output "lb_dns_name" {
   value = module.load-balancer.lb_dns
 }
+
+output "mongo_nat_gateway" {
+  value = module.vpc.mongo_nat_gateway
+}

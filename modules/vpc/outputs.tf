@@ -10,3 +10,7 @@ output "app_subnet_id" {
 output "db_subnet_id" {
   value = aws_subnet.db_subnet.id
 }
+
+output "mongo_nat_gateway" {
+  value = aws_nat_gateway.db_nat_gateway.private_ip
+}

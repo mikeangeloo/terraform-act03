@@ -25,3 +25,8 @@ resource "aws_route" "internet_access" {
   destination_cidr_block = "0.0.0.0/0"
   gateway_id             = aws_internet_gateway.igw.id
 }
+
+resource "aws_nat_gateway" "db_nat_gateway" {
+  connectivity_type = "private"
+  subnet_id = aws_subnet.db_subnet.id
+}

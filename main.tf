@@ -40,42 +40,6 @@ module "instances" {
     }
   }
 }
-# module "db_setup" {
-#   source           = "./modules/remote-setup"
-#   user             = "ubuntu"
-#   private_key      = "${path.module}/UNIR-DEVOPS.pem"
-#   host             = module.instances.public_ips["mean-db"]
-#   timeout          = "5m"
-#   inline_commands  = ["mkdir -p /home/ubuntu/code/scripts"]
-#   file_source      = "${path.module}/scripts/mongodb-setup.sh"
-#   file_destination = "/home/ubuntu/code/scripts/mongodb-setup.sh"
-#   inline_post_commands = [
-#     "chmod +x /home/ubuntu/code/scripts/mongodb-setup.sh",
-#     "/home/ubuntu/code/scripts/mongodb-setup.sh"
-#   ]
-#   depends_on = [module.instances.mean_db]
-# }
-
-# module "app_setup" {
-#   source           = "./modules/remote-setup"
-#   user             = "ubuntu"
-#   private_key      = "${path.module}/UNIR-DEVOPS.pem"
-#   host             = module.instances.public_ips["mean-app"]
-#   timeout          = "5m"
-#   inline_commands  = ["mkdir -p /home/ubuntu/code/scripts"]
-#   file_source      = ""
-#   file_content = templatefile("${path.module}/scripts/app-setup.sh.tpl", {
-#     db_host = module.instances.private_ips["mean-db"]
-#   })
-#   file_destination = "/home/ubuntu/code/scripts/app-setup.sh"
-#   inline_post_commands = [
-#     "chmod +x /home/ubuntu/code/scripts/app-setup.sh",
-#     "/home/ubuntu/code/scripts/app-setup.sh"
-#   ]
-#   depends_on = [module.instances.mean_app, module.db_setup]
-# }
-
-
 
 resource "null_resource" "db_setup" {
   # Crear el directorio de destino en la máquina remota antes de copiar el archivo
