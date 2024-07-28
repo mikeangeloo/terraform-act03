@@ -53,22 +53,23 @@ sudo pm2 start server.js
 sudo pm2 startup systemd
 sudo pm2 save
 # Iniciando servicio personalizado en pm2
-sudo systemctl status pm2-root
+sudo systemctl status pm2-root --no-pager
 sudo pm2 list
 ###
 
-### Paso 5: Moviendo compilado frontend
-sudo cp -fr ~/projects/mean-stack-app/client/dist/. /usr/share/nginx/html
-###
 
-### Paso 6: Configurando Nginx como servidor proxy inverso
+### Paso 5: Configurando Nginx como servidor proxy inverso
 sudo service apache2 stop
 sudo apt install -y nginx
 # Comprobando que el servicio Nginx se esté ejecutando
-sudo systemctl status nginx
+sudo systemctl status nginx --no-pager
 sudo rm /etc/nginx/sites-available/default
 #Moviendo la configuración para proxy conf.d
 sudo cp -fr ~/projects/mean-stack-app/config/nginx/nginx.conf /etc/nginx/sites-available/default
+###
+
+### Paso 6: Moviendo compilado frontend
+sudo cp -fr ~/projects/mean-stack-app/client/dist/. /usr/share/nginx/html
 #Reiniciando el servidor nginx para aplicar cambios
 sudo systemctl restart nginx
 ###
